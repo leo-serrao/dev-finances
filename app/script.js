@@ -1,50 +1,51 @@
-//----------  ABRE/FECHA O MODAL --------------//
-const modalBtn = document.querySelector('.button.new')
-const cancelBtn = document.querySelector('.button.cancel')
-const modal = document.querySelector('.modal-overlay')
+//----------  ABRE/FECHA O MODAL  --------------//
 
-function toggleModal() {
-  if (modal.classList === 'modal-overlay active') {
+const Modal = {
+  open() {
+    const modal = document.querySelector('.modal-overlay')
     modal.classList.toggle('active')
-  } else {
+  },
+  close() {
+    const modal = document.querySelector('.modal-overlay')
     modal.classList.toggle('active')
   }
 }
 
-modalBtn.addEventListener('click', toggleModal)
-cancelBtn.addEventListener('click', toggleModal)
+//----------  FUNCIONALIDADES DA PÁGINA  --------------//
 
-//----------  FUNCIONALIDADES DA PÁGINA --------------//
+//----- Calculos de entrada, saída e total-----//
 
-//-----  Arr com as transações exibidas na tabela -----//
-const transactions = [
-  {
-    id: 1,
-    description: 'Luz',
-    amount: -50000,
-    date: '15/03/2022'
+const Storage = {
+  get() {
+    return JSON.parse(localStorage.getItem('dev.finances:transaction')) || []
   },
-  {
-    id: 2,
-    description: 'Website',
-    amount: 500000,
-    date: '15/03/2022'
-  },
-  {
-    id: 3,
-    description: 'Internet',
-    amount: -20000,
-    date: '15/03/2022'
+  set(transactions) {
+    localStorage.setItem(
+      'dev.finances:transaction',
+      JSON.stringify(transactions)
+    )
   }
-]
+}
 
-//-----  Calculos de entrada, saída e total -----//
 const Transaction = {
+  all: Storage.get(),
+
+  add(transaction) {
+    Transaction.all.push(transaction)
+
+    App.reload()
+  },
+
+  remove(index) {
+    Transaction.all.splice(index, 1)
+
+    App.reload()
+  },
   //-----  Calcula as entradas -----//
   incomes() {
     let income = 0
 
-    transactions.forEach(transaction => {
+    Transaction.all.forEach(transaction => {
       if (transaction.amount > 0) {
         income += transaction.amount
       }
@@ -56,7 +57,7 @@ const Transaction = {
   expenses() {
     let expense = 0
 
-    transactions.forEach(transaction => {
+    Transaction.all.forEach(transaction => {
       if (transaction.amount < 0) {
         expense += transaction.amount
       }
@@ -66,33 +67,28 @@ const Transaction = {
   },
   //-----  Calcula o total -----//
   total() {
-    let total = 0
-
-    transactions.forEach(transaction => {
-      total = this.incomes() + this.expenses()
-    })
-
-    return total
+    return Transaction.incomes() + Transaction.expenses()
   }
 }
 
-//----- Funcionalidades ligadas ao DOM -----//
+//-----Funcionalidades ligadas ao DOM-----//
 const DOM = {
   transactionsContainer: document.querySelector('#data-table tbody'),
 
   //-----  Insere o elemento criado na tabela -----//
-  addTransaction(transaction) {
+  addTransaction(transaction, index) {
     const tr = document.createElement('tr')
-    tr.innerHTML = DOM.innerHTMLTransaction(transaction)
+    tr.innerHTML = DOM.innerHTMLTransaction(transaction, index)
+    tr.dataset.index = index
 
     DOM.transactionsContainer.appendChild(tr)
   },
 
   //-----  Cria o elemento da tabela -----//
-  innerHTMLTransaction(transaction) {
+  innerHTMLTransaction(transaction, index) {
     const CSSClass = transaction.amount > 0 ? 'income' : 'expense'
 
-    const amount = utils.formatCurrency(transaction.amount)
+    const amount = Utils.formatCurrency(transaction.amount)
 
     const html = ` 
     
@@ -100,7 +96,7 @@ const DOM = {
       <td class="${CSSClass}">${amount}</td>
       <td class="date">${transaction.date}</td>
       <td>
-        <img src="../assets/minus.svg" alt="Remover transação" />
+        <img onclick="Transaction.remove(${index})" src="../assets/minus.svg" alt="Remover transação" />
       </td>
     `
 
@@ -109,22 +105,37 @@ const DOM = {
 
   //-----  Atualiza os valores exibidos de entrada, saída e total -----//
   updateBalance() {
-    document.getElementById('income-display').innerHTML = utils.formatCurrency(
+    document.getElementById('income-display').innerHTML = Utils.formatCurrency(
       Transaction.incomes()
     )
 
-    document.getElementById('expense-display').innerHTML = utils.formatCurrency(
+    document.getElementById('expense-display').innerHTML = Utils.formatCurrency(
       Transaction.expenses()
     )
 
-    document.getElementById('total-display').innerHTML = utils.formatCurrency(
+    document.getElementById('total-display').innerHTML = Utils.formatCurrency(
       Transaction.total()
     )
+  },
+
+  clearTransactions() {
+    DOM.transactionsContainer.innerHTML = ''
   }
 }
 
-//----- Utilidades -----//
-const utils = {
+//-----Utilidades-----//
+const Utils = {
+  formatAmount(value) {
+    value = Number(value) * 100
+
+    return value
+  },
+
+  formatDate(date) {
+    const splittedDate = date.split('-')
+    return `${splittedDate[2]}/${splittedDate[1]}/${splittedDate[0]}`
+  },
+
   //-----  Formata os valores da tabela -----//
   formatCurrency(value) {
     //-----  Verifica +/- e atribui sinal se necessário -----//
@@ -146,8 +157,89 @@ const utils = {
   }
 }
 
-transactions.forEach(transaction => {
-  DOM.addTransaction(transaction)
-})
+//-----Captura de dados-----//
+const Form = {
+  description: document.querySelector('input#description'),
+  amount: document.querySelector('input#amount'),
+  date: document.querySelector('input#date'),
 
-DOM.updateBalance()
+  getValues() {
+    return {
+      description: Form.description.value,
+      amount: Form.amount.value,
+      date: Form.date.value
+    }
+  },
+
+  validateFields() {
+    const { description, amount, date } = Form.getValues()
+
+    if (
+      description.trim() === '' ||
+      amount.trim() === '' ||
+      date.trim() === ''
+    ) {
+      throw new Error('Por favor, preencha todos os campos')
+    }
+  },
+
+  formatValues() {
+    let { description, amount, date } = Form.getValues()
+
+    amount = Utils.formatAmount(amount)
+
+    date = Utils.formatDate(date)
+
+    return {
+      description,
+      amount,
+      date
+    }
+  },
+
+  clearFields() {
+    Form.description.value = ''
+    Form.amount.value = ''
+    Form.date.value = ''
+  },
+
+  submit(event) {
+    event.preventDefault()
+
+    try {
+      //-----Verifica se todos os dados foram preenchidos -----//
+      Form.validateFields()
+
+      //-----Formata os dados para salvar -----//
+      const transaction = Form.formatValues()
+
+      //-----Salva os dados -----//
+      Transaction.add(transaction)
+
+      //-----Apaga os dados do formulário -----//
+      Form.clearFields()
+
+      //-----Fecha o modal-----//
+      Modal.close()
+    } catch (error) {
+      alert(error.message)
+    }
+  }
+}
+
+const App = {
+  init() {
+    Transaction.all.forEach(DOM.addTransaction)
+
+    DOM.updateBalance()
+
+    Storage.set(Transaction.all)
+  },
+  reload() {
+    DOM.clearTransactions()
+
+    App.init()
+  }
+}
+
+App.init()
